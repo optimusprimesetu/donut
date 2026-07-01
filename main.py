@@ -1,4 +1,18 @@
 import math
+import time
+
+
+# donut
+
+radius = 1.0
+
+width  = 0.6
+
+pi = 3.1415 # 1 radian
+
+a = 0 # skeleton rim |  0 - 2pi
+
+b = 0 # surface ring |  0 - 2pi
 
 # window dimensions
 w = 80
@@ -27,17 +41,6 @@ screen_h = 1
 # h = 1 / 0.25
 cam_h = 4
 
-# donut
-
-radius = 1.0
-
-width  = 0.5
-
-pi = 3.1415 # 1 radian
-
-a = 0 # skeleton rim |  0 - 2pi
-
-b = 0 # surface ring |  0 - 2pi
 
 # x -> left to right
 # y -> bottom to top
@@ -152,6 +155,20 @@ def rotate_3d(coords: list[float, float, float], ra: float, rb: float, rc: float
 
 	return [*current]
 
+
+def normalize(vector: list[float, float, float]) -> list[float, float, float]:
+	v = vector
+	d = (v[0]**2 + v[1]**2 + v[2]**2)**0.5
+
+	if d == 0:
+		return [0, 0, 0]
+
+	new_x = v[0] / d
+	new_y = v[1] / d
+	new_z = v[2] / d
+	
+	return [new_x, new_y, new_z]
+
 def get_normal(ra: float, rb: float, rc: float, a: float, b: float) -> list[float, float, float]:
 	# normalized vector from skeleton rim to the surface
 
@@ -209,41 +226,9 @@ def get_normal(ra: float, rb: float, rc: float, a: float, b: float) -> list[floa
 	vector = rotate_3d(vector, ra, rb, rc)
 
 	# normalize vector
-	v = vector
+	vector = normalize(vector)
 
-	d = (v[0]**2 + v[1]**2 + v[2]**2)**0.5
-
-	new_x = v[0] / d
-	new_y = v[1] / d
-	new_z = v[2] / d
-
-	return [new_x, new_y, new_z]
-
-def normalize(v):
-	d = (v[0]**2 + v[1]**2 + v[2]**2)**0.5
-
-	if d == 0:
-		return [0, 0, 0]
-
-	return [
-		v[0] / d,
-		v[1] / d,
-		v[2] / d
-	]
-
-def get_normal(ra: float, rb: float, rc: float, a: float, b: float):
-
-	# normal in torus local space
-	nx = math.sin(b) * math.sin(a)
-	ny = math.cos(b)
-	nz = math.sin(b) * math.cos(a)
-
-	normal = [nx, ny, nz]
-
-	# rotate normal into world space
-	normal = rotate_3d(normal, ra, rb, rc)
-
-	return normalize(normal)
+	return vector
 
 def project_on_screen(point: list[float, float, float]) -> list[float, float]:
 	'''
@@ -282,21 +267,28 @@ def get_to_cam_distance(point: list[float, float, float]) -> float:
 	return d
 
 def is_normal_face_visible(normal):
-
 	camera_direction = [0, 0, 1]
 
-	return (
-		normal[0]*camera_direction[0] +
-		normal[1]*camera_direction[1] +
-		normal[2]*camera_direction[2]
-	) < 0
+	return (normal[0]*camera_direction[0] + normal[1]*camera_direction[1] + normal[2]*camera_direction[2]) < 0
+
+# https://www.google.com/url?sa=t&source=web&rct=j&url=https%3A%2F%2Fwww.tiktok.com%2F%40jomaoppa%2Fvideo%2F7085420569780440366&ved=0CBYQjRxqGAoTCJCthPS7sZUDFQAAAAAdAAAAABCgAQ&opi=89978449
+colors = ".,-~!;=/$#@"
+
+def get_color(normal):
+	light = normalize([0,0,-1])
+
+	brightness = max(normal[0]*light[0] + normal[1]*light[1] + normal[2]*light[2], 0)
+
+	index = int(brightness * (len(colors)))
+
+	return colors[index]
 
 point = get_3d_point(0, pi / 2)
 
 # in radians
-ra = - pi / 2 / 10 # rotation a -> z, x plane z+ x0 start, going clockwise
-rb = - pi / 2 / 10 # rotation b -> y, x plane y+ x0 start, going clockwise
-rc = - pi / 2 / 10 # rotation c -> y, z plane y+ z0 start, going from y: 1, z: 0 to y:0, z: 1
+ra = 0 # rotation a -> z, x plane z+ x0 start, going clockwise
+rb = 0 # rotation b -> y, x plane y+ x0 start, going clockwise
+rc = 0 # rotation c -> y, z plane y+ z0 start, going from y: 1, z: 0 to y:0, z: 1
 
 #normal = get_normal(ra, rb, rc, test_a, test_b)
 
@@ -312,84 +304,98 @@ print(f"projection coords: {project_on_screen(point)}")
 
 # pipeline
 # 1. Decide the Skeleton Rim Points number
-num_rim = 256
+num_rim = 150
 
 # 2. Decide the Surface Rings Points' Number
-num_ring = 128
+num_ring = 150
 
 points   = []
 
 rim_ring = []
 
+normals_world = []
+
 # 3. Get the points
 for rim_n in range(num_rim):
 	for ring_n in range(num_ring):
-		points.append(get_3d_point( ((pi*2)/num_rim)*rim_n , ((pi*2)/num_ring)*ring_n ))
+		a = ((pi*2) / num_rim ) * rim_n
+		b = ((pi*2) / num_ring) * ring_n
+
+		point = get_3d_point(a, b)
+		points.append(point)
 		rim_ring.append([rim_n, ring_n])
 
-# Source - https://stackoverflow.com/a/74186686
-# Posted by chungaloider
-# Retrieved 2026-07-01, License - CC BY-SA 4.0
-colors = ".-=/$@"
-
-def get_color(normal):
-
-	light = normalize([-1,1,-1])
-
-	brightness = (
-		normal[0]*light[0] +
-		normal[1]*light[1] +
-		normal[2]*light[2]
-	)
+		# unit surface normal in local space
+		# rotated in sync with the point below
+		normals_world.append(normalize([
+			math.sin(b) * math.sin(a),
+			math.cos(b),
+			math.sin(b) * math.cos(a),
+		]))
 
 
-	# clamp
-	brightness = max(0, brightness)
 
-
-	index = int(
-		brightness * (len(colors)-1)
-	)
-
-	return colors[index]
+dt = 1 / 60
+acc = 0
+last = time.perf_counter()
 
 while 1:
+	now = time.perf_counter()
+	acc += now - last
+	last = now
 
-	# rotate the points
-	for i in range(len(points)):
-		points[i] = rotate_3d(points[i], ra, rb, rc)
+	while acc >= dt:
+		acc -= dt
 
-	# 4. Project the points onto a screen & Color the pixels by calculating the distances to the surface
-	projections = []
-	distances   = []
-	normals     = []
-	for p, rimring in zip(points.copy(), rim_ring):
-		proj = project_on_screen(p)
+		# rotate at 1 radian per second
+		ra = rb = rc = pi*dt
 
-		if proj[0] > 1 or proj[0] < -1 or proj[1] > 1 or proj[1] < -1:
-			continue
+		# rotate the points
+		for i in range(len(points)):
+			points[i] = rotate_3d(points[i], ra, rb, rc)
+			normals_world[i] = rotate_3d(normals_world[i], ra, rb, rc)
 
-		normal = get_normal(ra, rb, rc, rimring[0], rimring[1])
+		# 4. Project the points onto a screen & Color the pixels by calculating the distances to the surface
+		projections = []
+		depths      = []
+		normals     = []
+		for p, normal in zip(points, normals_world):
+			proj = project_on_screen(p)
 
-		if not is_normal_face_visible(normal):
-			continue
+			if proj[0] > 1 or proj[0] < -1 or proj[1] > 1 or proj[1] < -1:
+				continue
 
-		normals.append(normal)
+			if not is_normal_face_visible(normal):
+				continue
 
-		projections.append(proj)
+			normals.append(normal)
 
-	grid_points = []
-	# for each projection find its place on the terminal grid
-	# translate screen float to terminal int
-	for p in projections.copy():
-		grid_points.append(  (int(((p[0] + 1) / 2) * w), int(((p[1] + 1) / 2) * h))  )
+			projections.append(proj)
 
-	buffer = list(' ' * ((w + 1) * h))
+			# depth for the z-buffer: camera sits at -z looking toward +z,
+			# so a smaller z is closer to the camera
+			depths.append(p[2])
 
-	for gp, n in zip(grid_points, normals):
-		buffer[(w + 1) * gp[1] + gp[0]] = get_color(n)
+		grid_points = []
+		# for each projection find its place on the terminal grid
+		# translate screen float to terminal int
+		for p in projections.copy():
+			grid_points.append(  (int(((p[0] + 1) / 2) * w), int(((p[1] + 1) / 2) * h))  )
 
-	for i in range(h):
-		buffer[w] = '\n'
+		buffer = list(' ' * ((w + 1) * h))
+		# z-buffer: nearest z drawn into each cell so far (inf = still empty)
+		depth_buffer = [float('inf')] * ((w + 1) * h)
 
-	print(''.join(buffer))
+		for gp, n, z in zip(grid_points, normals, depths):
+			cell = (w + 1) * gp[1] + gp[0]
+
+			# only draw if this point is nearer than whatever is already there,
+			# so the far side of the donut can't overwrite the near side
+			if z < depth_buffer[cell]:
+				depth_buffer[cell] = z
+				buffer[cell] = get_color(n)
+
+		for i in range(h):
+			buffer[w] = '\n'
+
+		print(''.join(buffer))
