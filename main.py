@@ -304,10 +304,10 @@ print(f"projection coords: {project_on_screen(point)}")
 
 # pipeline
 # 1. Decide the Skeleton Rim Points number
-num_rim = 150
+num_rim = 250
 
 # 2. Decide the Surface Rings Points' Number
-num_ring = 150
+num_ring = 250
 
 points   = []
 
